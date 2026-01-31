@@ -1,12 +1,59 @@
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useRouter } from 'next/router';
+import { socket } from "@/common/lib/socket";
 
+import { useSetRoomId } from "@/common/recoil/room";
+
+import NotFoundModal from "../modals/NotFound";
+
+import { useModal } from "@/common/recoil/modal";
 
 const Home = () => {
     const [roomId, setRoomId] = useState("");
     const [username, setUsername] = useState("");
-    
+    const setAtomRoomId = useSetRoomId();
+
+    const router = useRouter();
+
+    const { openModal } = useModal();
+
+    useEffect(() => {
+      const handleCreated = (roomIdFromServer: string) => {
+        setAtomRoomId(roomIdFromServer);
+        router.push(roomIdFromServer);
+      };
+
+      const handleJoinedRoom = (roomIdFromServer: string, failed?: boolean) => {
+        if (!failed) {
+          setAtomRoomId(roomIdFromServer);
+          router.push(roomIdFromServer);
+        } else {
+          openModal(<NotFoundModal id={roomId} />);
+        }
+      };
+      socket.on("created", handleCreated);
+      socket.on("joined", handleJoinedRoom);
+
+      return () => {
+        socket.off("created", handleCreated);
+        socket.off("joined", handleJoinedRoom);
+      };
+    }, [openModal, roomId, router, setAtomRoomId]);
+
+    useEffect(() => {
+      socket.emit("leave_room");
+      setAtomRoomId("");
+    }, [setAtomRoomId]);
+
+    const handleCreateRoom = () => {
+      socket.emit("create_room", username);
+    };
+
+    const handleJoinRoom = (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      socket.emit("join_room", roomId, username);
+    };
 
     return (
         <div className="flex flex-col items-center min-h-screen bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 text-navy-800">
